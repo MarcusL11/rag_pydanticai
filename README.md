@@ -1,5 +1,7 @@
 # Drug Info RAG with PydanticAI
 
+![Illustration for this repo - Main View](rag_webscraping_watercolor.png)
+
 A Retrieval-Augmented Generation (RAG) application that answers questions about pharmaceutical drugs using scraped medical data. Built with PydanticAI, LangChain, and PostgreSQL/pgvector.
 
 ## Features
