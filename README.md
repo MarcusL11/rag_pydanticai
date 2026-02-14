@@ -91,20 +91,13 @@ psql -d your_database -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ### Option 1: Command Line Interface
 
 ```bash
-python pydantic_example.py
+python main.py
 ```
 
-You'll be prompted to enter a question:
+The application will automatically:
 
-```
-Hi, I am your friendly Assistant -- Ask a drug-related question: What are the side effects of sertraline?
-```
-
-### Option 2: Web Chat Interface
-
-```bash
-python pydantic_web.py
-```
+1. Check if the vector store is populated (populate it if empty)
+2. Start the web server
 
 Then open your browser to: **<http://localhost:8000>**
 
@@ -118,11 +111,8 @@ Features:
 ## Project Structure
 
 ```
-day_1_rag/
-├── pydantic_example.py      # CLI version with PGVector
-├── pydantic_web.py          # Web UI version with PydanticAI
-├── scrape_data.py           # Firecrawl scraper (optional re-scraping)
-├── blog.md                  # Detailed implementation notes
+rag_pydanticai/
+├── main.py                  # CLI + Web UI with PydanticAI and PGVector
 ├── data/
 │   └── raw_documents/       # Scraped JSON files (auto-generated)
 └── README.md               # This file
@@ -132,17 +122,22 @@ day_1_rag/
 
 ### 1. Data Scraping (Optional)
 
-If you want to re-scrape data:
+If you want to re-scrape data, the `scrape_and_save_data()` function in `main.py` handles this:
 
 ```python
-from firecrawl import Firecrawl
-
-app = Firecrawl()
-crawl_result = app.crawl(
-    "https://www.mayoclinic.org/drugs-supplements",
-    limit=10,
-    scrape_options={"formats": ["markdown"]},
-)
+def scrape_and_save_data():
+    """Scrape drug information from Mayo Clinic and save to disk"""
+    app = Firecrawl()
+    
+    # Crawl the base URL
+    crawl_result = app.crawl(
+        BASE_URL,
+        limit=CRAWL_LIMIT,
+        scrape_options={"formats": ["markdown"]},
+    )
+    
+    # Extract URLs and batch scrape pages
+    # Save results to data/raw_documents/
 ```
 
 ### 2. Vector Store Population
@@ -161,21 +156,11 @@ The application automatically checks if the vector store is populated. If not, i
 ```python
 @dataclass
 class RAGDeps:
-    vector_store: PGVectorStore
-    embeddings: OpenAIEmbeddings
-```
-
-**Response Structure (`RAGResponse`):**
-
-```python
-class RAGResponse(BaseModel):
-    answer: str
-    sources: list[str]
-    confidence: float
+    vector_store: PineconeVectorStore | PGVectorStore
 ```
 
 > [!TIP]
-> `RAGDeps` uses `@dataclass` (simple dependency container) while `RAGResponse` extends `BaseModel` (enables Pydantic validation and JSON schema generation for the LLM's structured output).
+> `RAGDeps` uses `@dataclass` as a simple dependency container for the vector store.
 
 **Retrieval Tool:**
 
@@ -195,7 +180,7 @@ rag_agent = Agent(
     deps_type=RAGDeps,
     system_prompt="""
     You are a helpful medical assistant specializing in drug information.
-    Use the retrieve tool to find information when users ask questions.
+    Use the retrieve tool to find information about drugs when users ask questions.
     Always cite your sources and be accurate.
     """,
 )
@@ -206,9 +191,9 @@ rag_agent = Agent(
 Convert agent to web UI:
 
 ```python
-deps = RAGDeps(vector_store=vector_store, embeddings=embeddings)
+deps = RAGDeps(vector_store=vector_store)
 app = rag_agent.to_web(deps=deps)
-uvicorn.run(app, host="0.0.0.0", port=8000)
+# Run with: uvicorn main:app --reload
 ```
 
 ## Key Implementation Details
@@ -224,14 +209,6 @@ Uses `RecursiveCharacterTextSplitter` with this priority order:
 5. Any character
 
 This preserves semantic coherence while staying within 500-character chunks.
-
-### Usage Limits
-
-The web UI version removes PydanticAI's default request limits:
-
-```python
-usage_limits = UsageLimits(request_limit=None, response_tokens_limit=50000)
-```
 
 ### Vector Store Options
 
@@ -259,7 +236,7 @@ This project demonstrates:
 - [Best Chunking Strategies for RAG in 2025](https://www.firecrawl.dev/blog/best-chunking-strategies-rag-2025)
 - [How to build a production agentic app, the Pydantic Way](https://pydantic.dev/articles/building-agentic-application)
 
-See `blog.md` for cimplementation notes.
+See `blog.md` for the implementation notes.
 
 ## License
 
